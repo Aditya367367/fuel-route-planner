@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Route fuel plan</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
+    #map { height: 100%; }
+    #panel { position: absolute; z-index: 1000; top: 12px; right: 12px; width: 340px; max-height: 85%;
+             overflow: auto; background: #fff; padding: 12px 14px; border-radius: 8px;
+             box-shadow: 0 2px 10px rgba(0,0,0,.25); font-size: 14px; }
+    #panel h1 { font-size: 16px; margin: 0 0 6px; }
+    #panel li { margin-bottom: 10px; line-height: 1.35; }
+    #panel small { color: #555; }
+    #panel a { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="panel"></div>
+  {{ plan|json_script:"plan" }}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const plan = JSON.parse(document.getElementById("plan").textContent);
+    const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const map = L.map("map");
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18, attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    const line = plan.route_geojson.features.find(f => f.properties.kind === "route");
+    const routeLayer = L.geoJSON(line, { style: { color: "#2563eb", weight: 4 } }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [30, 30] });
+
+    L.marker([plan.start.latitude, plan.start.longitude]).addTo(map).bindPopup("Start: " + esc(plan.start.label));
+    L.marker([plan.finish.latitude, plan.finish.longitude]).addTo(map).bindPopup("Finish: " + esc(plan.finish.label));
+    plan.fuel_stops.forEach(s => {
+      // grey dot = where the CSV puts the station (town centre), dashed line to its spot on the route
+      L.polyline([[s.station_latitude, s.station_longitude], [s.latitude, s.longitude]],
+        { color: "#6b7280", weight: 2, dashArray: "4 4" }).addTo(map);
+      L.circleMarker([s.station_latitude, s.station_longitude], { radius: 5, color: "#374151", fillColor: "#9ca3af", fillOpacity: 1 })
+        .addTo(map).bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.address)}<br>${esc(s.city)}, ${esc(s.state)}<br><i>approx. station location (city centre)</i>`);
+      L.circleMarker([s.latitude, s.longitude], { radius: 9, color: "#b91c1c", fillColor: "#ef4444", fillOpacity: .9 })
+        .addTo(map)
+        .bindPopup(`<b>#${s.stop} ${esc(s.name)}</b><br>${esc(s.city)}, ${esc(s.state)}<br>$${s.price_per_gallon}/gal<br>${s.gallons_purchased} gal = $${s.cost}`);
+    });
+
+    document.getElementById("panel").innerHTML =
+      `<h1>${esc(plan.start.query)} &rarr; ${esc(plan.finish.query)}</h1>` +
+      `<div>${plan.distance_miles} mi &middot; <b>$${plan.total_fuel_cost.toFixed(2)}</b> fuel</div>` +
+      `<ol>` + plan.fuel_stops.map(s => {
+        const q = encodeURIComponent(`${s.name} ${s.address} ${s.city} ${s.state}`);
+        return `<li><b>${esc(s.name)}</b><br>` +
+          `${esc(s.address)}<br>${esc(s.city)}, ${esc(s.state)}<br>` +
+          `<small>mile ${s.route_mile} &middot; ${s.off_route_miles} mi from route</small><br>` +
+          `${s.gallons_purchased} gal @ $${s.price_per_gallon} = <b>$${s.cost.toFixed(2)}</b><br>` +
+          `<a href="https://www.google.com/maps/search/?api=1&query=${q}" target="_blank" rel="noopener">Verify on Google Maps</a></li>`;
+      }).join("") + `</ol>` +
+      `<small>Red = stop placed on route. Gray dot = station's recorded (city-level) location.</small>`;
+  </script>
+</body>
+</html>

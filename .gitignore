@@ -1,0 +1,19 @@
+# environments and secrets
+.venv/
+venv/
+.env
+
+# python
+__pycache__/
+*.pyc
+
+# local database (rebuild with migrate + load_stations)
+db.sqlite3
+
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# my own study notes, not part of the submission
+PROJECT_GUIDE.md
